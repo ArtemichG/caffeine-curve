@@ -138,15 +138,15 @@
   <p class="sub">33 mg tablet, half-life 6 h. Morning spike at 05:15. With Auto on, those sliders place the tablets to minimize (21:15 + variation + peak) / average.</p>
   <p class="group">Morning spike</p>
   <div class="doses">
-    <label class="dose"><span>2:00</span><input id="half" type="range" min="1" max="48" step="1" value="8" aria-label="Morning half-life"></label>
+    <label class="dose"><span>2 h</span><input id="half" type="range" min="1" max="12" step="1" value="2" aria-label="Morning half-life"></label>
     <label class="dose"><span>150 mg</span><input id="amount" type="range" min="0" max="400" step="5" value="150" aria-label="Morning amount"></label>
   </div>
   <p class="group">Tablets</p>
   <div class="doses" id="tablets">
-    <label class="dose"><span>08:00</span><input type="range" min="0" max="95" step="1" value="32" aria-label="Intake 1"></label>
-    <label class="dose"><span>10:30</span><input type="range" min="0" max="95" step="1" value="42" aria-label="Intake 2"></label>
-    <label class="dose"><span>13:00</span><input type="range" min="0" max="95" step="1" value="52" aria-label="Intake 3"></label>
-    <label class="dose"><span>15:30</span><input type="range" min="0" max="95" step="1" value="62" aria-label="Intake 4"></label>
+    <label class="dose"><span>08:00</span><input type="range" min="0" max="23" step="1" value="8" aria-label="Intake 1"></label>
+    <label class="dose"><span>11:00</span><input type="range" min="0" max="23" step="1" value="11" aria-label="Intake 2"></label>
+    <label class="dose"><span>13:00</span><input type="range" min="0" max="23" step="1" value="13" aria-label="Intake 3"></label>
+    <label class="dose"><span>16:00</span><input type="range" min="0" max="23" step="1" value="16" aria-label="Intake 4"></label>
   </div>
   <div class="opt">
     <button type="button" id="optimize" aria-pressed="true">Auto</button>
@@ -313,7 +313,7 @@ function startSearch() {
   const token = ++searchToken;
   const natDecay = naturalDecay.slice();
   const natAt = naturalAtSlot.slice();
-  const last = BED_SLOT - 1;
+  const last = 23;
   const best = [0, 0, 0, 0];
   let bestScore = Infinity;
   let a = 0;
@@ -331,10 +331,10 @@ function startSearch() {
     if (token !== searchToken) return;
     const t0 = performance.now();
     while (performance.now() - t0 < 12) {
-      acc[0] = a;
-      acc[1] = b;
-      acc[2] = c;
-      acc[3] = d;
+      acc[0] = a * 4;
+      acc[1] = b * 4;
+      acc[2] = c * 4;
+      acc[3] = d * 4;
       const score = scoreOf(acc, natDecay, natAt);
       if (score < bestScore) {
         bestScore = score;
@@ -380,7 +380,7 @@ function node(name, attrs) {
 function render() {
   const times = doses.map((row) => {
     const input = row.querySelector("input");
-    const mins = Number(input.value) * 15;
+    const mins = Number(input.value) * 60;
     row.querySelector("span").textContent = fmt(mins);
     input.setAttribute("aria-valuetext", fmt(mins));
     return mins;
@@ -495,11 +495,11 @@ const halfLabel = halfInput.previousElementSibling;
 const amountLabel = amountInput.previousElementSibling;
 
 function readMorning() {
-  morningHalfMin = Number(halfInput.value) * STEP;
+  morningHalfMin = Number(halfInput.value) * 60;
   morningMg = Number(amountInput.value);
-  halfLabel.textContent = fmt(morningHalfMin) + " h";
+  halfLabel.textContent = halfInput.value + " h";
   amountLabel.textContent = morningMg + " mg";
-  halfInput.setAttribute("aria-valuetext", fmt(morningHalfMin) + " h");
+  halfInput.setAttribute("aria-valuetext", halfInput.value + " h");
   amountInput.setAttribute("aria-valuetext", morningMg + " mg");
   rebuildNatural();
 }
