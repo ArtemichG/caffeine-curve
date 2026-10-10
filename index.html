@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caffeine</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; color: #111; }
+  body {
+    font: 14px/1.4 ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  main {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 56px 24px 72px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+  }
+  .sub {
+    margin: 4px 0 36px;
+    color: #8a8a8a;
+    font-size: 13px;
+  }
+  .doses {
+    display: grid;
+    gap: 16px;
+    margin: 0 0 28px;
+  }
+  .dose {
+    display: grid;
+    grid-template-columns: 68px 1fr;
+    align-items: center;
+    gap: 14px;
+  }
+  .group {
+    margin: 0 0 12px;
+    color: #8a8a8a;
+    font-size: 13px;
+  }
+  .dose span { font-size: 13px; white-space: nowrap; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 18px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 1px;
+    background: #111;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    margin-top: -5.5px;
+    border: 0;
+    border-radius: 50%;
+    background: #111;
+  }
+  input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px #e6e6e6;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 1px;
+    background: #111;
+    border: 0;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: 0;
+    border-radius: 50%;
+    background: #111;
+  }
+  .readout { margin: 0 0 28px; }
+  .when { color: #8a8a8a; font-size: 13px; }
+  .value {
+    margin-top: 2px;
+    font-size: 44px;
+    font-weight: 450;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+  .value small {
+    margin-left: 4px;
+    font-size: 14px;
+    letter-spacing: 0;
+    color: #8a8a8a;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: 220px;
+    overflow: visible;
+  }
+  svg text {
+    fill: #8a8a8a;
+    font: 11px ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  svg text.peak { fill: #111; }
+  .opt {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    margin: 0 0 32px;
+  }
+  button {
+    appearance: none;
+    border: 0;
+    border-bottom: 1px solid #111;
+    background: none;
+    padding: 0 0 1px;
+    color: #111;
+    font: inherit;
+    cursor: pointer;
+  }
+  button[aria-pressed="false"] {
+    color: #8a8a8a;
+    border-bottom-color: transparent;
+  }
+  .note { color: #8a8a8a; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Caffeine</h1>
+  <p class="sub">33 mg tablet, half-life 6 h. Morning spike at 05:15. With Auto on, those sliders place the tablets to minimize (21:15 + variation + peak) / average.</p>
+  <p class="group">Morning spike</p>
+  <div class="doses">
+    <label class="dose"><span>2:00</span><input id="half" type="range" min="1" max="48" step="1" value="8" aria-label="Morning half-life"></label>
+    <label class="dose"><span>150 mg</span><input id="amount" type="range" min="0" max="400" step="5" value="150" aria-label="Morning amount"></label>
+  </div>
+  <p class="group">Tablets</p>
+  <div class="doses" id="tablets">
+    <label class="dose"><span>08:00</span><input type="range" min="0" max="95" step="1" value="32" aria-label="Intake 1"></label>
+    <label class="dose"><span>10:30</span><input type="range" min="0" max="95" step="1" value="42" aria-label="Intake 2"></label>
+    <label class="dose"><span>13:00</span><input type="range" min="0" max="95" step="1" value="52" aria-label="Intake 3"></label>
+    <label class="dose"><span>15:30</span><input type="range" min="0" max="95" step="1" value="62" aria-label="Intake 4"></label>
+  </div>
+  <div class="opt">
+    <button type="button" id="optimize" aria-pressed="true">Auto</button>
+    <span class="note" id="stats"></span>
+  </div>
+  <p class="readout">
+    <span class="when">21:15</span><br>
+    <span class="value"><span id="mg">0.0</span><small>mg</small></span>
+  </p>
+  <svg id="chart" role="img" aria-label="Caffeine remaining over the day"></svg>
+</main>
+<script>
+const HALF_LIFE_H = 6;
+const DOSE_MG = 33;
+const DAY_MIN = 24 * 60;
+const AT_MIN = 21 * 60 + 15;
+const WAKE_MIN = 5 * 60 + 15;
+const STEP = 15;
+const WAKE_SLOT = WAKE_MIN / STEP;
+const BED_SLOT = AT_MIN / STEP;
+
+let morningMg = 150;
+let morningHalfMin = 120;
+
+const decay = new Float64Array(97);
+const naturalDecay = new Float64Array(97);
+for (let i = 0; i <= 96; i++) decay[i] = DOSE_MG * Math.pow(0.5, (i * STEP) / 60 / HALF_LIFE_H);
+const sampleSlots = [];
+for (let s = WAKE_SLOT; s <= BED_SLOT; s++) sampleSlots.push(s);
+const naturalAtSlot = new Float64Array(sampleSlots.length);
+
+function rebuildNatural() {
+  const halfH = morningHalfMin / 60;
+  for (let i = 0; i <= 96; i++) {
+    const hours = (i * STEP) / 60;
+    naturalDecay[i] = morningMg === 0 ? 0 : morningMg * Math.pow(0.5, hours / halfH);
+  }
+  for (let i = 0; i < sampleSlots.length; i++) naturalAtSlot[i] = naturalDecay[sampleSlots[i] - WAKE_SLOT];
+}
+
+const svg = document.getElementById("chart");
+const mgEl = document.getElementById("mg");
+const statsEl = document.getElementById("stats");
+const doses = [...document.querySelectorAll("#tablets .dose")];
+const NS = "http://www.w3.org/2000/svg";
+
+function fmt(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+}
+
+function levelAt(minute, times) {
+  let sum = 0;
+  for (const t of times) {
+    if (minute < t) continue;
+    const elapsedH = (minute - t) / 60;
+    sum += DOSE_MG * Math.pow(0.5, elapsedH / HALF_LIFE_H);
+  }
+  return sum;
+}
+
+function naturalAt(minute) {
+  if (minute < WAKE_MIN || morningMg === 0) return 0;
+  return morningMg * Math.pow(0.5, ((minute - WAKE_MIN) / 60) / (morningHalfMin / 60));
+}
+
+const scratch = { bed: 0, sd: 0, peak: 0, mean: 0, score: 0 };
+
+function fillMetrics(ts, out) {
+  let bed = 0;
+  for (let k = 0; k < 4; k++) {
+    const lag = BED_SLOT - ts[k];
+    if (lag >= 0) bed += decay[lag];
+  }
+  let peak = 0;
+  for (let e = 0; e < 5; e++) {
+    const s = e === 0 ? WAKE_SLOT : ts[e - 1];
+    let c = 0;
+    for (let k = 0; k < 4; k++) {
+      const lag = s - ts[k];
+      if (lag >= 0) c += decay[lag];
+    }
+    const natural = s < WAKE_SLOT ? 0 : naturalDecay[s - WAKE_SLOT];
+    const v = c + natural;
+    if (v > peak) peak = v;
+  }
+  let sum = 0;
+  let sum2 = 0;
+  const n = sampleSlots.length;
+  for (let i = 0; i < n; i++) {
+    const s = sampleSlots[i];
+    let c = 0;
+    for (let k = 0; k < 4; k++) {
+      const lag = s - ts[k];
+      if (lag >= 0) c += decay[lag];
+    }
+    const v = c + naturalAtSlot[i];
+    sum += v;
+    sum2 += v * v;
+  }
+  const mean = sum / n;
+  const sd = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
+  out.bed = bed;
+  out.sd = sd;
+  out.peak = peak;
+  out.mean = mean;
+  out.score = mean > 1e-9 ? (bed + sd + peak) / mean : Infinity;
+  return out;
+}
+
+function scoreOf(ts, natDecay, natAt) {
+  let bed = 0;
+  for (let k = 0; k < 4; k++) {
+    const lag = BED_SLOT - ts[k];
+    if (lag >= 0) bed += decay[lag];
+  }
+  let peak = 0;
+  for (let e = 0; e < 5; e++) {
+    const s = e === 0 ? WAKE_SLOT : ts[e - 1];
+    let c = 0;
+    for (let k = 0; k < 4; k++) {
+      const lag = s - ts[k];
+      if (lag >= 0) c += decay[lag];
+    }
+    const natural = s < WAKE_SLOT ? 0 : natDecay[s - WAKE_SLOT];
+    const v = c + natural;
+    if (v > peak) peak = v;
+  }
+  let sum = 0;
+  let sum2 = 0;
+  const n = sampleSlots.length;
+  for (let i = 0; i < n; i++) {
+    const s = sampleSlots[i];
+    let c = 0;
+    for (let k = 0; k < 4; k++) {
+      const lag = s - ts[k];
+      if (lag >= 0) c += decay[lag];
+    }
+    const v = c + natAt[i];
+    sum += v;
+    sum2 += v * v;
+  }
+  const mean = sum / n;
+  if (mean <= 1e-9) return Infinity;
+  const sd = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
+  return (bed + sd + peak) / mean;
+}
+
+let auto = true;
+let searchToken = 0;
+let searchTimer = 0;
+const optimizeButton = document.getElementById("optimize");
+
+function applySlots(best) {
+  doses.forEach((row, i) => {
+    row.querySelector("input").value = String(best[i]);
+  });
+  render();
+}
+
+function startSearch() {
+  if (!auto) return;
+  const token = ++searchToken;
+  const natDecay = naturalDecay.slice();
+  const natAt = naturalAtSlot.slice();
+  const last = BED_SLOT - 1;
+  const best = [0, 0, 0, 0];
+  let bestScore = Infinity;
+  let a = 0;
+  let b = 0;
+  let c = 0;
+  let d = 0;
+  const acc = [0, 0, 0, 0];
+
+  function finish() {
+    if (token !== searchToken) return;
+    applySlots(best);
+  }
+
+  function step() {
+    if (token !== searchToken) return;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 12) {
+      acc[0] = a;
+      acc[1] = b;
+      acc[2] = c;
+      acc[3] = d;
+      const score = scoreOf(acc, natDecay, natAt);
+      if (score < bestScore) {
+        bestScore = score;
+        best[0] = a;
+        best[1] = b;
+        best[2] = c;
+        best[3] = d;
+      }
+      if (d < last) d++;
+      else if (c < last) { c++; d = c; }
+      else if (b < last) { b++; c = b; d = b; }
+      else if (a < last) { a++; b = a; c = a; d = a; }
+      else { finish(); return; }
+    }
+    setTimeout(step, 0);
+  }
+  step();
+}
+
+function scheduleSearch() {
+  if (!auto) return;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(startSearch, 60);
+}
+
+let axisMax = 0;
+
+function fittedMax(peak) {
+  return Math.ceil(Math.max(peak * 1.08, 10) / 10) * 10;
+}
+
+function tickLabel(value) {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function node(name, attrs) {
+  const el = document.createElementNS(NS, name);
+  for (const [key, val] of Object.entries(attrs)) el.setAttribute(key, val);
+  return el;
+}
+
+function render() {
+  const times = doses.map((row) => {
+    const input = row.querySelector("input");
+    const mins = Number(input.value) * 15;
+    row.querySelector("span").textContent = fmt(mins);
+    input.setAttribute("aria-valuetext", fmt(mins));
+    return mins;
+  });
+
+  let peakMin = times[0];
+  let peak = levelAt(peakMin, times);
+  for (const t of times) {
+    const y = levelAt(t, times);
+    if (y > peak) {
+      peak = y;
+      peakMin = t;
+    }
+  }
+
+  const slots = times.map((t) => t / STEP);
+  const stats = fillMetrics(slots, scratch);
+  const at = stats.bed;
+  mgEl.textContent = at.toFixed(1);
+  if (stats.mean <= 1e-9) statsEl.textContent = "—";
+  else {
+    const part = (value) => (value / stats.mean).toFixed(2);
+    const bedPart = part(stats.bed);
+    const sdPart = part(stats.sd);
+    const peakPart = part(stats.peak);
+    const total = (Number(bedPart) + Number(sdPart) + Number(peakPart)).toFixed(2);
+    statsEl.textContent = bedPart + " + " + sdPart + " + " + peakPart + " = " + total;
+  }
+  svg.setAttribute("aria-label", "Caffeine and tension over the day. Peak caffeine " + peak.toFixed(1) + " mg at " + fmt(peakMin) + ". " + at.toFixed(1) + " mg at 21:15. Peak tension " + stats.peak.toFixed(1) + ".");
+
+  const width = Math.max(280, Math.round(svg.clientWidth || 560));
+  const height = 220;
+  const padL = 36;
+  const padR = 8;
+  const padT = 28;
+  const padB = 22;
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+
+  const pts = [];
+  const tensionPts = [];
+  let tensionPeak = 0;
+  for (let m = 0; m <= DAY_MIN; m += 5) {
+    const caffeine = levelAt(m, times);
+    const tension = caffeine + naturalAt(m);
+    pts.push([m, caffeine]);
+    tensionPts.push([m, tension]);
+    if (tension > tensionPeak) tensionPeak = tension;
+  }
+  const scalePeak = Math.max(peak, tensionPeak);
+  const target = fittedMax(scalePeak);
+  if (axisMax === 0) axisMax = target;
+  else if (scalePeak * 1.08 > axisMax) axisMax = target;
+  else if (target <= axisMax - 20) axisMax = target;
+  const ymax = axisMax;
+  const innerW = width - padL - padR;
+  const innerH = height - padT - padB;
+  const xOf = (m) => padL + (m / DAY_MIN) * innerW;
+  const yOf = (v) => padT + (1 - v / ymax) * innerH;
+  const base = yOf(0);
+
+  const parts = [];
+  for (let i = 0; i <= 2; i++) {
+    const v = (ymax * i) / 2;
+    const y = yOf(v);
+    parts.push(node("line", { x1: padL, y1: y, x2: width - padR, y2: y, stroke: i === 0 ? "#111" : "#eee", "stroke-width": 1 }));
+    const label = node("text", { x: padL - 8, y: y + 3, "text-anchor": "end" });
+    label.textContent = tickLabel(v);
+    parts.push(label);
+  }
+  for (const hour of [0, 6, 12, 18, 24]) {
+    const anchor = hour === 0 ? "start" : hour === 24 ? "end" : "middle";
+    const label = node("text", { x: xOf(hour * 60), y: height - 4, "text-anchor": anchor });
+    label.textContent = String(hour).padStart(2, "0");
+    parts.push(label);
+  }
+  const markX = xOf(AT_MIN);
+  parts.push(node("line", { x1: markX, y1: padT, x2: markX, y2: base, stroke: "#ccc", "stroke-width": 1 }));
+  for (const t of times) {
+    parts.push(node("line", { x1: xOf(t), y1: base, x2: xOf(t), y2: base - 6, stroke: "#111", "stroke-width": 1 }));
+  }
+  const line = (series, stroke, width) => node("polyline", {
+    fill: "none",
+    stroke,
+    "stroke-width": width,
+    "stroke-linejoin": "round",
+    "stroke-linecap": "round",
+    points: series.map(([m, v]) => xOf(m).toFixed(2) + "," + yOf(v).toFixed(2)).join(" ")
+  });
+  parts.push(line(tensionPts, "#b0b0b0", 1));
+  parts.push(line(pts, "#111", 1.5));
+  const peakX = xOf(peakMin);
+  const peakY = yOf(peak);
+  parts.push(node("circle", { cx: peakX, cy: peakY, r: 5, fill: "#fff", stroke: "#111", "stroke-width": 1.5 }));
+  const peakLabel = node("text", { class: "peak" });
+  if (peakX > width - padR - 46) {
+    peakLabel.setAttribute("x", peakX - 8);
+    peakLabel.setAttribute("text-anchor", "end");
+  } else {
+    peakLabel.setAttribute("x", peakX + 8);
+    peakLabel.setAttribute("text-anchor", "start");
+  }
+  peakLabel.setAttribute("y", peakY < padT + 16 ? peakY + 14 : peakY - 8);
+  peakLabel.textContent = fmt(peakMin) + "  " + peak.toFixed(1);
+  parts.push(peakLabel);
+  parts.push(node("circle", { cx: markX, cy: yOf(at), r: 3.5, fill: "#111" }));
+  svg.replaceChildren(...parts);
+}
+
+const halfInput = document.getElementById("half");
+const amountInput = document.getElementById("amount");
+const halfLabel = halfInput.previousElementSibling;
+const amountLabel = amountInput.previousElementSibling;
+
+function readMorning() {
+  morningHalfMin = Number(halfInput.value) * STEP;
+  morningMg = Number(amountInput.value);
+  halfLabel.textContent = fmt(morningHalfMin) + " h";
+  amountLabel.textContent = morningMg + " mg";
+  halfInput.setAttribute("aria-valuetext", fmt(morningHalfMin) + " h");
+  amountInput.setAttribute("aria-valuetext", morningMg + " mg");
+  rebuildNatural();
+}
+
+for (const row of doses) row.querySelector("input").addEventListener("input", render);
+halfInput.addEventListener("input", () => {
+  readMorning();
+  render();
+  scheduleSearch();
+});
+amountInput.addEventListener("input", () => {
+  readMorning();
+  render();
+  scheduleSearch();
+});
+optimizeButton.addEventListener("click", () => {
+  auto = !auto;
+  optimizeButton.setAttribute("aria-pressed", auto ? "true" : "false");
+  clearTimeout(searchTimer);
+  if (!auto) {
+    searchToken++;
+    return;
+  }
+  startSearch();
+});
+new ResizeObserver(render).observe(svg);
+readMorning();
+render();
+scheduleSearch();
+</script>
+</body>
+</html>
